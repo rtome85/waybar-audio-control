@@ -4,8 +4,6 @@ A GTK4 Wayland audio control popup for [waybar](https://github.com/Alexays/Wayba
 
 Displays a popup in the top-right corner of the screen with per-application volume sliders, playback device selection, and input device selection. Dismisses when clicking outside the popup.
 
-![screenshot placeholder](screenshot.png)
-
 ## Features
 
 - Per-application volume control (sink inputs)
