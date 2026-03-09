@@ -1,0 +1,11 @@
+[package]
+name = "audio-control"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+gtk4 = "0.9"
+gtk4-layer-shell = "0.4"
+libpulse-binding = "2.28"
+glib = "0.20"
+gdk4 = "0.9"
