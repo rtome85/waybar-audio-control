@@ -394,70 +394,128 @@ fn update_devices(
     audio: Arc<Mutex<AudioManager>>,
     is_sink: bool,
 ) {
-    while let Some(child) = container.first_child() {
-        container.remove(&child);
+    let existing_indices: std::collections::HashSet<u32> =
+        devices.iter().map(|d| d.index).collect();
+
+    // Remove widgets for devices that disappeared and any stale placeholder
+    let mut to_remove = Vec::new();
+    let mut child = container.first_child();
+    while let Some(widget) = child {
+        let wname = widget.widget_name();
+        if wname == "placeholder" {
+            if !devices.is_empty() {
+                to_remove.push(widget.clone());
+            }
+        } else if let Some(idx_str) = wname.strip_prefix("device-") {
+            if let Ok(idx) = idx_str.parse::<u32>() {
+                if !existing_indices.contains(&idx) {
+                    to_remove.push(widget.clone());
+                }
+            }
+        }
+        child = widget.next_sibling();
+    }
+    for widget in to_remove {
+        container.remove(&widget);
     }
 
     if devices.is_empty() {
-        let label = Label::builder()
-            .label(if is_sink {
-                "No playback devices found"
-            } else {
-                "No input devices found"
-            })
-            .css_classes(vec!["volume-label".to_string()])
-            .halign(gtk::Align::Start)
-            .build();
-        container.append(&label);
+        // Only add placeholder if not already there
+        let has_placeholder = container
+            .first_child()
+            .map_or(false, |w| w.widget_name() == "placeholder");
+        if !has_placeholder {
+            let label = Label::builder()
+                .label(if is_sink {
+                    "No playback devices found"
+                } else {
+                    "No input devices found"
+                })
+                .css_classes(vec!["volume-label".to_string()])
+                .halign(gtk::Align::Start)
+                .build();
+            label.set_widget_name("placeholder");
+            container.append(&label);
+        }
         return;
     }
 
-    let devices_box = Box::builder()
-        .orientation(Orientation::Vertical)
-        .spacing(4)
-        .build();
-
     for device in devices.iter() {
-        let mut css_classes = vec!["device-item".to_string()];
-        if device.is_default {
-            css_classes.push("default".to_string());
+        let widget_name = format!("device-{}", device.index);
+
+        // Find existing widget for this device
+        let mut existing = None;
+        let mut child = container.first_child();
+        while let Some(widget) = child {
+            if widget.widget_name() == widget_name {
+                existing = Some(widget.clone());
+                break;
+            }
+            child = widget.next_sibling();
         }
 
-        let item_box = Box::builder()
-            .orientation(Orientation::Horizontal)
-            .spacing(0)
-            .css_classes(css_classes)
-            .build();
-
-        let icon = Label::builder()
-            .label(if is_sink { "\u{f057f}" } else { "\u{f130}" })
-            .css_classes(vec!["device-icon".to_string()])
-            .build();
-
-        let text = Label::builder()
-            .label(&device.description)
-            .css_classes(vec!["device-label".to_string()])
-            .halign(gtk::Align::Start)
-            .build();
-
-        item_box.append(&icon);
-        item_box.append(&text);
-
-        let name = device.name.clone();
-        let audio_clone = audio.clone();
-        let gesture = gtk::GestureClick::new();
-        gesture.connect_pressed(move |_, _, _, _| {
-            let audio = audio_clone.lock().unwrap();
-            if is_sink {
-                audio.set_default_sink(&name);
-            } else {
-                audio.set_default_source(&name);
+        if let Some(widget) = existing {
+            // Only update the default CSS class if it changed
+            if let Some(item_box) = widget.downcast_ref::<Box>() {
+                if device.is_default {
+                    item_box.add_css_class("default");
+                } else {
+                    item_box.remove_css_class("default");
+                }
             }
-        });
-        item_box.add_controller(gesture);
+        } else {
+            let mut css_classes = vec!["device-item".to_string()];
+            if device.is_default {
+                css_classes.push("default".to_string());
+            }
 
-        devices_box.append(&item_box);
+            let item_box = Box::builder()
+                .orientation(Orientation::Horizontal)
+                .spacing(0)
+                .css_classes(css_classes)
+                .build();
+            item_box.set_widget_name(&widget_name);
+
+            let icon = Label::builder()
+                .label(if is_sink { "\u{f057f}" } else { "\u{f130}" })
+                .css_classes(vec!["device-icon".to_string()])
+                .build();
+
+            let text = Label::builder()
+                .label(&device.description)
+                .css_classes(vec!["device-label".to_string()])
+                .halign(gtk::Align::Start)
+                .build();
+
+            item_box.append(&icon);
+            item_box.append(&text);
+
+            let name = device.name.clone();
+            let audio_clone = audio.clone();
+            let container_clone = container.clone();
+            let item_box_clone = item_box.clone();
+            let gesture = gtk::GestureClick::new();
+            gesture.connect_pressed(move |_, _, _, _| {
+                // Optimistic update: reflect the change immediately without waiting for the timer
+                let mut child = container_clone.first_child();
+                while let Some(widget) = child {
+                    if let Some(b) = widget.downcast_ref::<Box>() {
+                        b.remove_css_class("default");
+                    }
+                    child = widget.next_sibling();
+                }
+                item_box_clone.add_css_class("default");
+
+                let audio = audio_clone.lock().unwrap();
+                if is_sink {
+                    audio.set_default_sink(&name);
+                } else {
+                    audio.set_default_source(&name);
+                }
+            });
+            item_box.add_controller(gesture);
+
+            container.append(&item_box);
+        }
     }
-
-    container.append(&devices_box);
 }
