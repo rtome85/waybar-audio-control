@@ -71,11 +71,13 @@ impl AudioManager {
     pub fn list_sink_inputs(&self) -> Vec<AudioStream> {
         let streams = Rc::new(RefCell::new(Vec::new()));
         let streams_clone = streams.clone();
+        let done = Rc::new(RefCell::new(false));
+        let done_clone = done.clone();
 
         let introspector = self.context.borrow().introspect();
 
-        introspector.get_sink_input_info_list(move |result| {
-            if let libpulse_binding::callbacks::ListResult::Item(info) = result {
+        introspector.get_sink_input_info_list(move |result| match result {
+            libpulse_binding::callbacks::ListResult::Item(info) => {
                 let mut result_vec = streams_clone.borrow_mut();
 
                 let volume_percent = if info.volume.len() > 0 {
@@ -106,9 +108,23 @@ impl AudioManager {
                     app_name,
                 });
             }
+            libpulse_binding::callbacks::ListResult::End => {
+                *done_clone.borrow_mut() = true;
+            }
+            libpulse_binding::callbacks::ListResult::Error => {
+                *done_clone.borrow_mut() = true;
+            }
         });
 
-        self.iterate_until_complete();
+        loop {
+            match self.mainloop.borrow_mut().iterate(false) {
+                libpulse_binding::mainloop::standard::IterateResult::Success(_) => {}
+                _ => break,
+            }
+            if *done.borrow() {
+                break;
+            }
+        }
 
         let result = streams.borrow().clone();
         result
@@ -119,11 +135,15 @@ impl AudioManager {
         let devices_clone = devices.clone();
         let default_name = Rc::new(RefCell::new(String::new()));
         let default_name_clone = default_name.clone();
+        let sinks_done = Rc::new(RefCell::new(false));
+        let sinks_done_clone = sinks_done.clone();
+        let server_done = Rc::new(RefCell::new(false));
+        let server_done_clone = server_done.clone();
 
         let introspector = self.context.borrow().introspect();
 
-        introspector.get_sink_info_list(move |result| {
-            if let libpulse_binding::callbacks::ListResult::Item(info) = result {
+        introspector.get_sink_info_list(move |result| match result {
+            libpulse_binding::callbacks::ListResult::Item(info) => {
                 let mut result_vec = devices_clone.borrow_mut();
                 result_vec.push(AudioDevice {
                     index: info.index,
@@ -140,6 +160,12 @@ impl AudioManager {
                     is_default: false,
                 });
             }
+            libpulse_binding::callbacks::ListResult::End => {
+                *sinks_done_clone.borrow_mut() = true;
+            }
+            libpulse_binding::callbacks::ListResult::Error => {
+                *sinks_done_clone.borrow_mut() = true;
+            }
         });
 
         let introspector2 = self.context.borrow().introspect();
@@ -147,9 +173,18 @@ impl AudioManager {
             if let Some(name) = &info.default_sink_name {
                 *default_name_clone.borrow_mut() = name.to_string();
             }
+            *server_done_clone.borrow_mut() = true;
         });
 
-        self.iterate_until_complete();
+        loop {
+            match self.mainloop.borrow_mut().iterate(false) {
+                libpulse_binding::mainloop::standard::IterateResult::Success(_) => {}
+                _ => break,
+            }
+            if *sinks_done.borrow() && *server_done.borrow() {
+                break;
+            }
+        }
 
         let mut result = devices.borrow().clone();
         let default = default_name.borrow().clone();
@@ -166,11 +201,15 @@ impl AudioManager {
         let devices_clone = devices.clone();
         let default_name = Rc::new(RefCell::new(String::new()));
         let default_name_clone = default_name.clone();
+        let sources_done = Rc::new(RefCell::new(false));
+        let sources_done_clone = sources_done.clone();
+        let server_done = Rc::new(RefCell::new(false));
+        let server_done_clone = server_done.clone();
 
         let introspector = self.context.borrow().introspect();
 
-        introspector.get_source_info_list(move |result| {
-            if let libpulse_binding::callbacks::ListResult::Item(info) = result {
+        introspector.get_source_info_list(move |result| match result {
+            libpulse_binding::callbacks::ListResult::Item(info) => {
                 let mut result_vec = devices_clone.borrow_mut();
                 result_vec.push(AudioDevice {
                     index: info.index,
@@ -187,6 +226,12 @@ impl AudioManager {
                     is_default: false,
                 });
             }
+            libpulse_binding::callbacks::ListResult::End => {
+                *sources_done_clone.borrow_mut() = true;
+            }
+            libpulse_binding::callbacks::ListResult::Error => {
+                *sources_done_clone.borrow_mut() = true;
+            }
         });
 
         let introspector2 = self.context.borrow().introspect();
@@ -194,9 +239,18 @@ impl AudioManager {
             if let Some(name) = &info.default_source_name {
                 *default_name_clone.borrow_mut() = name.to_string();
             }
+            *server_done_clone.borrow_mut() = true;
         });
 
-        self.iterate_until_complete();
+        loop {
+            match self.mainloop.borrow_mut().iterate(false) {
+                libpulse_binding::mainloop::standard::IterateResult::Success(_) => {}
+                _ => break,
+            }
+            if *sources_done.borrow() && *server_done.borrow() {
+                break;
+            }
+        }
 
         let mut result = devices.borrow().clone();
         let default = default_name.borrow().clone();
