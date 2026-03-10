@@ -1,6 +1,6 @@
 use crate::audio::{AudioDevice, AudioManager, AudioStream};
 use gtk::prelude::*;
-use gtk::{Application, ApplicationWindow, Box, Button, Label, Orientation, Scale, Separator};
+use gtk::{Application, ApplicationWindow, Box, Label, Orientation, Scale, Separator};
 use gtk4 as gtk;
 use gtk4_layer_shell::{Layer, LayerShell};
 use std::sync::{Arc, Mutex};
@@ -72,28 +72,36 @@ scale:disabled highlight {
     margin-bottom: 8px;
 }
 
-.device-button {
+.device-item {
     background-color: #313244;
     color: #cdd6f4;
     border-radius: 8px;
     padding: 8px 12px;
-    border: none;
     margin: 2px;
     transition: background-color 0.2s ease;
 }
 
-.device-button:hover {
+.device-item:hover {
     background-color: #45475a;
 }
 
-.device-button.default {
+.device-item.default {
     background-color: #f5c2e7;
     color: #1e1e2e;
-    font-weight: 600;
 }
 
-.device-button.default:hover {
+.device-item.default:hover {
     background-color: #ebaac0;
+}
+
+.device-icon {
+    font-size: 16px;
+    margin-right: 8px;
+}
+
+.device-label {
+    font-size: 13px;
+    font-weight: 500;
 }
 
 separator {
@@ -404,22 +412,41 @@ fn update_devices(
         return;
     }
 
-    let grid = gtk::Grid::builder()
-        .orientation(Orientation::Horizontal)
-        .column_spacing(4)
-        .row_spacing(4)
+    let devices_box = Box::builder()
+        .orientation(Orientation::Vertical)
+        .spacing(4)
         .build();
 
-    for (i, device) in devices.iter().enumerate() {
-        let button = Button::builder()
-            .label(&device.description)
-            .css_classes(vec!["device-button".to_string()])
-            .hexpand(true)
+    for device in devices.iter() {
+        let mut css_classes = vec!["device-item".to_string()];
+        if device.is_default {
+            css_classes.push("default".to_string());
+        }
+
+        let item_box = Box::builder()
+            .orientation(Orientation::Horizontal)
+            .spacing(0)
+            .css_classes(css_classes)
             .build();
+
+        let icon = Label::builder()
+            .label(if is_sink { "\u{f057f}" } else { "\u{f130}" })
+            .css_classes(vec!["device-icon".to_string()])
+            .build();
+
+        let text = Label::builder()
+            .label(&device.description)
+            .css_classes(vec!["device-label".to_string()])
+            .halign(gtk::Align::Start)
+            .build();
+
+        item_box.append(&icon);
+        item_box.append(&text);
 
         let name = device.name.clone();
         let audio_clone = audio.clone();
-        button.connect_clicked(move |_| {
+        let gesture = gtk::GestureClick::new();
+        gesture.connect_pressed(move |_, _, _, _| {
             let audio = audio_clone.lock().unwrap();
             if is_sink {
                 audio.set_default_sink(&name);
@@ -427,11 +454,10 @@ fn update_devices(
                 audio.set_default_source(&name);
             }
         });
+        item_box.add_controller(gesture);
 
-        let col = (i % 2) as i32;
-        let row = (i / 2) as i32;
-        grid.attach(&button, col, row, 1, 1);
+        devices_box.append(&item_box);
     }
 
-    container.append(&grid);
+    container.append(&devices_box);
 }

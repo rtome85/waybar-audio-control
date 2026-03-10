@@ -117,6 +117,8 @@ impl AudioManager {
     pub fn list_sinks(&self) -> Vec<AudioDevice> {
         let devices = Rc::new(RefCell::new(Vec::new()));
         let devices_clone = devices.clone();
+        let default_name = Rc::new(RefCell::new(String::new()));
+        let default_name_clone = default_name.clone();
 
         let introspector = self.context.borrow().introspect();
 
@@ -140,15 +142,30 @@ impl AudioManager {
             }
         });
 
+        let introspector2 = self.context.borrow().introspect();
+        introspector2.get_server_info(move |info| {
+            if let Some(name) = &info.default_sink_name {
+                *default_name_clone.borrow_mut() = name.to_string();
+            }
+        });
+
         self.iterate_until_complete();
 
-        let result = devices.borrow().clone();
+        let mut result = devices.borrow().clone();
+        let default = default_name.borrow().clone();
+        for device in &mut result {
+            if device.name == default {
+                device.is_default = true;
+            }
+        }
         result
     }
 
     pub fn list_sources(&self) -> Vec<AudioDevice> {
         let devices = Rc::new(RefCell::new(Vec::new()));
         let devices_clone = devices.clone();
+        let default_name = Rc::new(RefCell::new(String::new()));
+        let default_name_clone = default_name.clone();
 
         let introspector = self.context.borrow().introspect();
 
@@ -172,9 +189,22 @@ impl AudioManager {
             }
         });
 
+        let introspector2 = self.context.borrow().introspect();
+        introspector2.get_server_info(move |info| {
+            if let Some(name) = &info.default_source_name {
+                *default_name_clone.borrow_mut() = name.to_string();
+            }
+        });
+
         self.iterate_until_complete();
 
-        let result = devices.borrow().clone();
+        let mut result = devices.borrow().clone();
+        let default = default_name.borrow().clone();
+        for device in &mut result {
+            if device.name == default {
+                device.is_default = true;
+            }
+        }
         result
     }
 
