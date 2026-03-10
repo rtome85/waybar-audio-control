@@ -210,14 +210,15 @@ impl AudioManager {
 
         introspector.get_source_info_list(move |result| match result {
             libpulse_binding::callbacks::ListResult::Item(info) => {
+                // Skip monitor sources (virtual loopback of sink output, not real inputs)
+                let name = info.name.as_deref().unwrap_or("");
+                if name.ends_with(".monitor") {
+                    return;
+                }
                 let mut result_vec = devices_clone.borrow_mut();
                 result_vec.push(AudioDevice {
                     index: info.index,
-                    name: info
-                        .name
-                        .as_ref()
-                        .map(|s| s.to_string())
-                        .unwrap_or_default(),
+                    name: name.to_string(),
                     description: info
                         .description
                         .as_ref()
@@ -278,16 +279,24 @@ impl AudioManager {
         self.context
             .borrow_mut()
             .set_default_sink(name, |_: bool| {});
-
-        self.iterate_until_complete();
+        self.flush();
     }
 
     pub fn set_default_source(&self, name: &str) {
         self.context
             .borrow_mut()
             .set_default_source(name, |_: bool| {});
+        self.flush();
+    }
 
-        self.iterate_until_complete();
+    // Flush a few iterations to send pending commands without blocking the GTK thread.
+    fn flush(&self) {
+        for _ in 0..5 {
+            match self.mainloop.borrow_mut().iterate(false) {
+                libpulse_binding::mainloop::standard::IterateResult::Success(_) => {}
+                _ => break,
+            }
+        }
     }
 
     fn iterate_until_complete(&self) {
