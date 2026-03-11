@@ -5,121 +5,169 @@ use gtk4 as gtk;
 use gtk4_layer_shell::{Layer, LayerShell};
 use std::sync::{Arc, Mutex};
 
-const CSS: &str = r#"
-window {
-    background-color: #1e1e2e;
-    border-radius: 12px;
-    padding: 16px;
-}
+fn build_css() -> String {
+    let home = std::env::var("HOME").unwrap_or_default();
+    let theme_dir = format!("{}/.config/omarchy/current/theme", home);
 
-.app-label {
-    color: #cdd6f4;
+    // Parse fg/bg from waybar.css — same source waybar uses.
+    // We use private names (_fg, _bg) to avoid conflicts with GTK4 reserved color names.
+    let fg = parse_color_from_file(&format!("{}/waybar.css", theme_dir), "foreground")
+        .unwrap_or_else(|| "#cdd6f4".to_string());
+    let bg = parse_color_from_file(&format!("{}/waybar.css", theme_dir), "background")
+        .unwrap_or_else(|| "#1e1e2e".to_string());
+
+    // accent is not in waybar.css; read it from colors.toml
+    let accent = parse_color_from_file(&format!("{}/colors.toml", theme_dir), "accent")
+        .unwrap_or_else(|| "#f5c2e7".to_string());
+
+    format!(
+        r#"
+@define-color _fg {fg};
+@define-color _bg {bg};
+@define-color _accent {accent};
+@define-color _surface alpha(@_fg, 0.08);
+@define-color _surface_hover alpha(@_fg, 0.14);
+@define-color _surface_disabled alpha(@_fg, 0.04);
+@define-color _subtext alpha(@_fg, 0.55);
+
+window {{
+    background-color: @_bg;
+    padding: 16px;
+}}
+
+.app-label {{
+    color: @_fg;
     font-size: 14px;
     font-weight: 500;
     margin-bottom: 4px;
-}
+}}
 
-.volume-label {
-    color: #a6adc8;
+.volume-label {{
+    color: @_subtext;
     font-size: 12px;
     margin-bottom: 8px;
-}
+}}
 
-scale {
+scale {{
     min-width: 280px;
     min-height: 6px;
     margin: 4px 0;
-}
+}}
 
-scale slider {
-    background-color: #f5c2e7;
+scale slider {{
+    background-color: @_accent;
     border-radius: 50%;
     min-width: 16px;
     min-height: 16px;
     border: none;
     box-shadow: none;
-}
+}}
 
-scale trough {
-    background-color: #313244;
+scale trough {{
+    background-color: @_surface;
     border-radius: 6px;
     min-height: 6px;
     border: none;
-}
+}}
 
-scale highlight {
-    background-color: #f5c2e7;
+scale highlight {{
+    background-color: @_fg;
     border-radius: 6px;
-}
+}}
 
-scale:disabled slider {
-    background-color: #585b70;
-}
+scale:disabled slider {{
+    background-color: @_subtext;
+}}
 
-scale:disabled trough {
-    background-color: #45475a;
-}
+scale:disabled trough {{
+    background-color: @_surface_disabled;
+}}
 
-scale:disabled highlight {
-    background-color: #585b70;
-}
+scale:disabled highlight {{
+    background-color: @_subtext;
+}}
 
-.section-title {
-    color: #f5c2e7;
+.section-title {{
+    color: @_accent;
     font-size: 13px;
     font-weight: 600;
     margin-top: 12px;
     margin-bottom: 8px;
-}
+}}
 
-.device-item {
-    background-color: #313244;
-    color: #cdd6f4;
-    border-radius: 8px;
+.device-item {{
+    background-color: @_surface;
+    color: @_fg;
     padding: 8px 12px;
     margin: 2px;
     transition: background-color 0.2s ease;
-}
+}}
 
-.device-item:hover {
-    background-color: #45475a;
-}
+.device-item:hover {{
+    background-color: @_surface_hover;
+}}
 
-.device-item.default {
-    background-color: #f5c2e7;
-    color: #1e1e2e;
-}
+.device-item.default {{
+    background-color: @_surface;
+    color: @_fg;
+    border: 1px solid @_fg;
+}}
 
-.device-item.default:hover {
-    background-color: #ebaac0;
-}
+.device-item.default:hover {{
+    background-color: @_surface_hover;
+}}
 
-.device-icon {
+.device-icon {{
     font-size: 16px;
     margin-right: 8px;
-}
+}}
 
-.device-label {
+.device-label {{
     font-size: 13px;
     font-weight: 500;
-}
+}}
 
-separator {
-    background-color: #313244;
+separator {{
+    background-color: @_surface;
     min-height: 1px;
     margin: 12px 0;
-}
+}}
 
-.container-box {
+.container-box {{
     padding: 8px;
-}
+}}
 
-window.backdrop-capture {
+window.backdrop-capture {{
     background-color: rgba(0, 0, 0, 0.02);
     border-radius: 0;
     padding: 0;
+}}
+"#
+    )
 }
-"#;
+
+/// Parse a `key = "value"` (TOML) or `@define-color key value;` (CSS) line from a file.
+fn parse_color_from_file(path: &str, key: &str) -> Option<String> {
+    let content = std::fs::read_to_string(path).ok()?;
+    for line in content.lines() {
+        // CSS: @define-color foreground #ffcead;
+        if let Some(rest) = line.strip_prefix("@define-color") {
+            let rest = rest.trim().trim_end_matches(';');
+            if let Some((k, v)) = rest.split_once(char::is_whitespace) {
+                if k.trim() == key {
+                    return Some(v.trim().to_string());
+                }
+            }
+        }
+        // TOML: accent = "#7d82d9"
+        if let Some((k, v)) = line.split_once('=') {
+            if k.trim() == key {
+                return Some(v.trim().trim_matches('"').to_string());
+            }
+        }
+    }
+    None
+}
 
 pub fn setup_layer_shell(window: &ApplicationWindow) {
     window.init_layer_shell();
@@ -133,7 +181,7 @@ pub fn setup_layer_shell(window: &ApplicationWindow) {
 
 pub fn apply_css(window: &ApplicationWindow) {
     let provider = gtk::CssProvider::new();
-    provider.load_from_data(CSS);
+    provider.load_from_data(&build_css());
 
     gtk::style_context_add_provider_for_display(
         &gtk::prelude::WidgetExt::display(window),
