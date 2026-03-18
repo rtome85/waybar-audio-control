@@ -5,6 +5,37 @@ use gtk4 as gtk;
 use gtk4_layer_shell::{Layer, LayerShell};
 use std::sync::{Arc, Mutex};
 
+fn app_icon(app_name: &str) -> &'static str {
+    let lower = app_name.to_lowercase();
+    if lower.contains("firefox") {
+        "\u{f269}" // nf-fa-firefox
+    } else if lower.contains("chrome") || lower.contains("chromium") {
+        "\u{f268}" // nf-fa-chrome
+    } else if lower.contains("spotify") {
+        "\u{f1bc}" // nf-fa-spotify
+    } else if lower.contains("vlc") {
+        "\u{f04b}" // nf-fa-play
+    } else if lower.contains("mpv") {
+        "\u{f04b}" // nf-fa-play
+    } else if lower.contains("discord") {
+        "\u{f392}" // nf-fa-discord
+    } else if lower.contains("steam") {
+        "\u{f1b6}" // nf-fa-steam
+    } else if lower.contains("telegram") {
+        "\u{f2c6}" // nf-fa-telegram
+    } else if lower.contains("zoom") {
+        "\u{f0c0}" // nf-fa-users
+    } else if lower.contains("brave") {
+        "\u{f268}" // nf-fa-chrome (similar)
+    } else if lower.contains("obs") {
+        "\u{f03d}" // nf-fa-video_camera
+    } else if lower.contains("pulse") || lower.contains("audio") {
+        "\u{f028}" // nf-fa-volume_up
+    } else {
+        "\u{f001}" // nf-fa-music
+    }
+}
+
 fn build_css() -> String {
     let home = std::env::var("HOME").unwrap_or_default();
     let theme_dir = format!("{}/.config/omarchy/current/theme", home);
@@ -48,10 +79,30 @@ window {{
     margin-bottom: 8px;
 }}
 
+.stream-icon {{
+    font-size: 15px;
+    margin-right: 8px;
+    color: @_fg;
+}}
+
+.stream-app-label {{
+    color: @_fg;
+    font-size: 14px;
+    font-weight: 500;
+}}
+
+.stream-volume-label {{
+    color: @_subtext;
+    font-size: 12px;
+    min-width: 36px;
+}}
+
 scale {{
-    min-width: 280px;
+    min-width: 200px;
     min-height: 6px;
     margin: 4px 0;
+    margin-left: 0;
+    padding-left: 0;
 }}
 
 scale slider {{
@@ -372,36 +423,58 @@ fn update_streams(container: &Box, streams: &[AudioStream], audio: Arc<Mutex<Aud
         if let Some(widget) = existing_widget {
             if let Some(stream_box) = widget.downcast_ref::<Box>() {
                 let children = stream_box.observe_children();
-                if let Some(volume_label_widget) = children.item(1) {
-                    if let Some(volume_label) = volume_label_widget.downcast_ref::<Label>() {
-                        volume_label.set_label(&format!("{}%", stream.volume));
-                    }
-                }
-                if let Some(scale_widget) = children.item(2) {
-                    if let Some(scale) = scale_widget.downcast_ref::<Scale>() {
-                        let adj = scale.adjustment();
-                        adj.set_value(stream.volume as f64);
+                // children: 0=header_box, 1=slider_row
+                if let Some(slider_row_widget) = children.item(1) {
+                    if let Some(slider_row) = slider_row_widget.downcast_ref::<Box>() {
+                        let row_children = slider_row.observe_children();
+                        // slider_row children: 0=scale, 1=volume_label
+                        if let Some(scale_widget) = row_children.item(0) {
+                            if let Some(scale) = scale_widget.downcast_ref::<Scale>() {
+                                let adj = scale.adjustment();
+                                adj.set_value(stream.volume as f64);
+                            }
+                        }
+                        if let Some(vol_widget) = row_children.item(1) {
+                            if let Some(volume_label) = vol_widget.downcast_ref::<Label>() {
+                                volume_label.set_label(&format!("{}%", stream.volume));
+                            }
+                        }
                     }
                 }
             }
         } else {
             let stream_box = Box::builder()
                 .orientation(Orientation::Vertical)
-                .spacing(0)
-                .margin_bottom(8)
+                .spacing(4)
+                .margin_bottom(12)
                 .build();
             stream_box.set_widget_name(&widget_name);
 
+            // Row 1: icon + app name
+            let header_box = Box::builder()
+                .orientation(Orientation::Horizontal)
+                .spacing(0)
+                .build();
+
+            let icon_label = Label::builder()
+                .label(app_icon(&stream.app_name))
+                .css_classes(vec!["stream-icon".to_string()])
+                .build();
+
             let app_label = Label::builder()
                 .label(&stream.app_name)
-                .css_classes(vec!["app-label".to_string()])
+                .css_classes(vec!["stream-app-label".to_string()])
                 .halign(gtk::Align::Start)
                 .build();
 
-            let volume_label = Label::builder()
-                .label(format!("{}%", stream.volume))
-                .css_classes(vec!["volume-label".to_string()])
-                .halign(gtk::Align::Start)
+            header_box.append(&icon_label);
+            header_box.append(&app_label);
+
+            // Row 2: slider + volume % inline
+            let slider_row = Box::builder()
+                .orientation(Orientation::Horizontal)
+                .spacing(8)
+                .valign(gtk::Align::Center)
                 .build();
 
             let scale = Scale::builder()
@@ -418,6 +491,12 @@ fn update_streams(container: &Box, streams: &[AudioStream], audio: Arc<Mutex<Aud
                 .draw_value(false)
                 .build();
 
+            let volume_label = Label::builder()
+                .label(format!("{}%", stream.volume))
+                .css_classes(vec!["stream-volume-label".to_string()])
+                .halign(gtk::Align::End)
+                .build();
+
             let index = stream.index;
             let audio_clone = audio.clone();
             let volume_label_clone = volume_label.clone();
@@ -428,9 +507,12 @@ fn update_streams(container: &Box, streams: &[AudioStream], audio: Arc<Mutex<Aud
                 volume_label_clone.set_label(&format!("{}%", value));
             });
 
-            stream_box.append(&app_label);
-            stream_box.append(&volume_label);
-            stream_box.append(&scale);
+            slider_row.append(&scale);
+            slider_row.append(&volume_label);
+
+            // children order: 0=header_box, 1=slider_row
+            stream_box.append(&header_box);
+            stream_box.append(&slider_row);
             container.append(&stream_box);
         }
     }
