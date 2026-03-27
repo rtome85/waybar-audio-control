@@ -1,4 +1,5 @@
 mod audio;
+mod media;
 mod ui;
 
 use audio::AudioManager;
