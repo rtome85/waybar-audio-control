@@ -704,13 +704,12 @@ fn update_streams(container: &Box, streams: &[AudioStream], audio: Arc<Mutex<Aud
             }
         } else {
             let stream_box = Box::builder()
-                .orientation(Orientation::Vertical)
+                .orientation(Orientation::Horizontal)
                 .spacing(4)
-                .margin_bottom(12)
                 .build();
             stream_box.set_widget_name(&widget_name);
 
-            // Row 1: icon + app name
+            // Row 1: icon
             let header_box = Box::builder()
                 .orientation(Orientation::Horizontal)
                 .spacing(0)
@@ -723,14 +722,7 @@ fn update_streams(container: &Box, streams: &[AudioStream], audio: Arc<Mutex<Aud
                 .css_classes(vec!["stream-icon".to_string()])
                 .build();
 
-            let app_label = Label::builder()
-                .label(display_name.as_str())
-                .css_classes(vec!["stream-app-label".to_string()])
-                .halign(gtk::Align::Start)
-                .build();
-
             header_box.append(&icon_label);
-            header_box.append(&app_label);
 
             // Row 2: slider + volume % inline
             let slider_row = Box::builder()
