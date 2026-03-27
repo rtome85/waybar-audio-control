@@ -761,13 +761,14 @@ fn update_streams(container: &Box, streams: &[AudioStream], audio: Arc<Mutex<Aud
 
             let audio_clone = audio.clone();
             let volume_label_clone = volume_label.clone();
-            scale.connect_value_changed(move |scale| {
-                let value = scale.value() as u32;
+            scale.connect_change_value(move |_scale, _scroll, value| {
+                let value = value as u32;
                 let audio = audio_clone.lock().unwrap();
                 for &idx in indices_cell_clone.borrow().iter() {
                     audio.set_sink_input_volume(idx, value);
                 }
                 volume_label_clone.set_label(&format!("{}%", value));
+                gtk::glib::Propagation::Proceed
             });
 
             slider_row.append(&scale);
