@@ -607,8 +607,7 @@ fn update_streams(container: &Box, streams: &[AudioStream], audio: Arc<Mutex<Aud
         groups.entry(key).or_default().push(stream);
     }
 
-    let active_apps: std::collections::HashSet<&str> =
-        groups.keys().map(|s| s.as_str()).collect();
+    let active_apps: std::collections::HashSet<&str> = groups.keys().map(|s| s.as_str()).collect();
 
     // Remove widgets for apps that are no longer active
     let mut to_remove = Vec::new();
@@ -680,9 +679,7 @@ fn update_streams(container: &Box, streams: &[AudioStream], audio: Arc<Mutex<Aud
             if let Some(stream_box) = widget.downcast_ref::<Box>() {
                 // Update the captured indices so the slider controls any new/removed streams
                 unsafe {
-                    if let Some(ptr) =
-                        stream_box.data::<Rc<RefCell<Vec<u32>>>>("stream_indices")
-                    {
+                    if let Some(ptr) = stream_box.data::<Rc<RefCell<Vec<u32>>>>("stream_indices") {
                         *ptr.as_ref().borrow_mut() = indices;
                     }
                 }
@@ -766,7 +763,9 @@ fn update_streams(container: &Box, streams: &[AudioStream], audio: Arc<Mutex<Aud
             // without recreating the widget (keeps slider stable during drags)
             let indices_cell = Rc::new(RefCell::new(indices));
             let indices_cell_clone = indices_cell.clone();
-            unsafe { stream_box.set_data("stream_indices", indices_cell); }
+            unsafe {
+                stream_box.set_data("stream_indices", indices_cell);
+            }
 
             let audio_clone = audio.clone();
             let volume_label_clone = volume_label.clone();
