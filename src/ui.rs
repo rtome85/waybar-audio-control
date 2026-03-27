@@ -205,7 +205,7 @@ window.backdrop-capture {{
 
 .media-artist {{
     color: @_subtext;
-    font-size: 1px;
+    font-size: 11px;
     margin-left: 23px;
     margin-bottom: 4px;
 }}
@@ -564,15 +564,19 @@ fn update_media(
 
         for (i, player) in players.iter().enumerate() {
             let bus = player.bus_name.clone();
-            let stack_clone = stack.clone();
-            let dots_clone = dots.clone();
             let current_clone = current_player.clone();
+            let weak_stack = stack.downgrade();
+            let weak_dots: Vec<_> = dots.iter().map(|d| d.downgrade()).collect();
 
             let gesture = gtk::GestureClick::new();
             gesture.connect_pressed(move |_, _, _, _| {
-                stack_clone.set_visible_child_name(&bus);
+                let Some(s) = weak_stack.upgrade() else {
+                    return;
+                };
+                s.set_visible_child_name(&bus);
                 *current_clone.borrow_mut() = Some(bus.clone());
-                for (j, d) in dots_clone.iter().enumerate() {
+                for (j, wd) in weak_dots.iter().enumerate() {
+                    let Some(d) = wd.upgrade() else { continue };
                     if j == i {
                         d.add_css_class("active");
                     } else {
