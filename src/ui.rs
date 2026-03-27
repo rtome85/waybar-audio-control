@@ -597,7 +597,14 @@ fn update_streams(container: &Box, streams: &[AudioStream], audio: Arc<Mutex<Aud
     let mut groups: std::collections::BTreeMap<String, Vec<&AudioStream>> =
         std::collections::BTreeMap::new();
     for stream in streams {
-        groups.entry(stream.app_name.clone()).or_default().push(stream);
+        // "Unknown" means APPLICATION_NAME was absent; keep each such stream
+        // separate since they are unrelated apps that happen to lack a name.
+        let key = if stream.app_name == "Unknown" {
+            format!("Unknown\x1f{}", stream.index)
+        } else {
+            stream.app_name.clone()
+        };
+        groups.entry(key).or_default().push(stream);
     }
 
     let active_apps: std::collections::HashSet<&str> =
@@ -712,13 +719,15 @@ fn update_streams(container: &Box, streams: &[AudioStream], audio: Arc<Mutex<Aud
                 .spacing(0)
                 .build();
 
+            let display_name = &app_streams[0].app_name;
+
             let icon_label = Label::builder()
-                .label(app_icon(app_name))
+                .label(app_icon(display_name))
                 .css_classes(vec!["stream-icon".to_string()])
                 .build();
 
             let app_label = Label::builder()
-                .label(app_name.as_str())
+                .label(display_name.as_str())
                 .css_classes(vec!["stream-app-label".to_string()])
                 .halign(gtk::Align::Start)
                 .build();
