@@ -593,35 +593,40 @@ fn update_media(
 }
 
 fn update_streams(container: &Box, streams: &[AudioStream], audio: Arc<Mutex<AudioManager>>) {
-    let mut existing_indices = std::collections::HashSet::new();
-
+    // Group streams by app_name so each app gets a single slider
+    let mut groups: std::collections::BTreeMap<String, Vec<&AudioStream>> =
+        std::collections::BTreeMap::new();
     for stream in streams {
-        existing_indices.insert(stream.index);
+        // "Unknown" means APPLICATION_NAME was absent; keep each such stream
+        // separate since they are unrelated apps that happen to lack a name.
+        let key = if stream.app_name == "Unknown" {
+            format!("Unknown\x1f{}", stream.index)
+        } else {
+            stream.app_name.clone()
+        };
+        groups.entry(key).or_default().push(stream);
     }
 
+    let active_apps: std::collections::HashSet<&str> =
+        groups.keys().map(|s| s.as_str()).collect();
+
+    // Remove widgets for apps that are no longer active
     let mut to_remove = Vec::new();
     let mut child = container.first_child();
     while let Some(widget) = child {
         let widget_name = widget.widget_name();
-        if widget_name.starts_with("stream-") {
-            if let Ok(index_str) = widget_name
-                .strip_prefix("stream-")
-                .unwrap_or("")
-                .parse::<u32>()
-            {
-                if !existing_indices.contains(&index_str) {
-                    to_remove.push(widget.clone());
-                }
+        if let Some(app_name) = widget_name.strip_prefix("stream-app-") {
+            if !active_apps.contains(app_name) {
+                to_remove.push(widget.clone());
             }
         }
         child = widget.next_sibling();
     }
-
     for widget in to_remove {
         container.remove(&widget);
     }
 
-    if streams.is_empty() {
+    if groups.is_empty() {
         let mut has_placeholder = false;
         let mut child = container.first_child();
         while let Some(widget) = child {
@@ -655,8 +660,11 @@ fn update_streams(container: &Box, streams: &[AudioStream], audio: Arc<Mutex<Aud
         }
     }
 
-    for stream in streams {
-        let widget_name = format!("stream-{}", stream.index);
+    for (app_name, app_streams) in &groups {
+        let avg_volume = (app_streams.iter().map(|s| s.volume as u64).sum::<u64>()
+            / app_streams.len() as u64) as u32;
+        let indices: Vec<u32> = app_streams.iter().map(|s| s.index).collect();
+        let widget_name = format!("stream-app-{}", app_name);
 
         let mut existing_widget = None;
         let mut child = container.first_child();
@@ -670,6 +678,14 @@ fn update_streams(container: &Box, streams: &[AudioStream], audio: Arc<Mutex<Aud
 
         if let Some(widget) = existing_widget {
             if let Some(stream_box) = widget.downcast_ref::<Box>() {
+                // Update the captured indices so the slider controls any new/removed streams
+                unsafe {
+                    if let Some(ptr) =
+                        stream_box.data::<Rc<RefCell<Vec<u32>>>>("stream_indices")
+                    {
+                        *ptr.as_ref().borrow_mut() = indices;
+                    }
+                }
                 let children = stream_box.observe_children();
                 // children: 0=header_box, 1=slider_row
                 if let Some(slider_row_widget) = children.item(1) {
@@ -678,13 +694,12 @@ fn update_streams(container: &Box, streams: &[AudioStream], audio: Arc<Mutex<Aud
                         // slider_row children: 0=scale, 1=volume_label
                         if let Some(scale_widget) = row_children.item(0) {
                             if let Some(scale) = scale_widget.downcast_ref::<Scale>() {
-                                let adj = scale.adjustment();
-                                adj.set_value(stream.volume as f64);
+                                scale.adjustment().set_value(avg_volume as f64);
                             }
                         }
                         if let Some(vol_widget) = row_children.item(1) {
                             if let Some(volume_label) = vol_widget.downcast_ref::<Label>() {
-                                volume_label.set_label(&format!("{}%", stream.volume));
+                                volume_label.set_label(&format!("{}%", avg_volume));
                             }
                         }
                     }
@@ -704,13 +719,15 @@ fn update_streams(container: &Box, streams: &[AudioStream], audio: Arc<Mutex<Aud
                 .spacing(0)
                 .build();
 
+            let display_name = &app_streams[0].app_name;
+
             let icon_label = Label::builder()
-                .label(app_icon(&stream.app_name))
+                .label(app_icon(display_name))
                 .css_classes(vec!["stream-icon".to_string()])
                 .build();
 
             let app_label = Label::builder()
-                .label(&stream.app_name)
+                .label(display_name.as_str())
                 .css_classes(vec!["stream-app-label".to_string()])
                 .halign(gtk::Align::Start)
                 .build();
@@ -728,7 +745,7 @@ fn update_streams(container: &Box, streams: &[AudioStream], audio: Arc<Mutex<Aud
             let scale = Scale::builder()
                 .orientation(Orientation::Horizontal)
                 .adjustment(&gtk::Adjustment::new(
-                    stream.volume as f64,
+                    avg_volume as f64,
                     0.0,
                     100.0,
                     1.0,
@@ -740,19 +757,27 @@ fn update_streams(container: &Box, streams: &[AudioStream], audio: Arc<Mutex<Aud
                 .build();
 
             let volume_label = Label::builder()
-                .label(format!("{}%", stream.volume))
+                .label(format!("{}%", avg_volume))
                 .css_classes(vec!["stream-volume-label".to_string()])
                 .halign(gtk::Align::End)
                 .build();
 
-            let index = stream.index;
+            // Store indices in a shared cell so refresh cycles can update them
+            // without recreating the widget (keeps slider stable during drags)
+            let indices_cell = Rc::new(RefCell::new(indices));
+            let indices_cell_clone = indices_cell.clone();
+            unsafe { stream_box.set_data("stream_indices", indices_cell); }
+
             let audio_clone = audio.clone();
             let volume_label_clone = volume_label.clone();
-            scale.connect_value_changed(move |scale| {
-                let value = scale.value() as u32;
+            scale.connect_change_value(move |_scale, _scroll, value| {
+                let value = value as u32;
                 let audio = audio_clone.lock().unwrap();
-                audio.set_sink_input_volume(index, value);
+                for &idx in indices_cell_clone.borrow().iter() {
+                    audio.set_sink_input_volume(idx, value);
+                }
                 volume_label_clone.set_label(&format!("{}%", value));
+                gtk::glib::Propagation::Proceed
             });
 
             slider_row.append(&scale);
