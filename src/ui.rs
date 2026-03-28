@@ -196,17 +196,26 @@ window.backdrop-capture {{
     padding: 0;
 }}
 
+.player-icon {{
+    font-size: 30px;
+    color: @_fg;
+    min-width: 52px;
+    min-height: 52px;
+    background: @_surface;
+    border-radius: 50%;
+    padding: 8px;
+    margin-right: 4px;
+}}
+
 .media-title {{
     color: @_fg;
     font-size: 13px;
     font-weight: 500;
-    margin-left: 23px;
 }}
 
 .media-artist {{
     color: @_subtext;
     font-size: 11px;
-    margin-left: 23px;
     margin-bottom: 4px;
 }}
 
@@ -420,50 +429,48 @@ pub fn build_ui(app: &Application, audio: Arc<Mutex<AudioManager>>) -> Applicati
 }
 
 fn build_player_card(player: &crate::media::MediaPlayerInfo) -> Box {
+    // Two-column layout: [app icon] | [title + artist + controls]
     let player_box = Box::builder()
-        .orientation(Orientation::Vertical)
-        .spacing(2)
-        .margin_bottom(6)
-        .build();
-
-    let header = Box::builder()
         .orientation(Orientation::Horizontal)
-        .spacing(0)
+        .spacing(12)
+        .margin_bottom(6)
+        .valign(gtk::Align::Center)
         .build();
 
+    // Left column: large circular app icon
     let icon = Label::builder()
         .label(app_icon(&player.identity))
-        .css_classes(vec!["stream-icon".to_string()])
+        .css_classes(vec!["player-icon".to_string()])
+        .valign(gtk::Align::Center)
         .build();
 
-    let name = Label::builder()
-        .label(&player.identity)
-        .css_classes(vec!["stream-app-label".to_string()])
-        .halign(gtk::Align::Start)
+    // Right column: title, artist, controls
+    let right_col = Box::builder()
+        .orientation(Orientation::Vertical)
+        .spacing(2)
+        .valign(gtk::Align::Center)
         .build();
-
-    header.append(&icon);
-    header.append(&name);
 
     let title_lbl = Label::builder()
         .label(player.title.as_deref().unwrap_or("Unknown track"))
         .css_classes(vec!["media-title".to_string()])
-        .halign(gtk::Align::Center)
+        .halign(gtk::Align::Start)
         .ellipsize(gtk::pango::EllipsizeMode::End)
-        .max_width_chars(32)
+        .max_width_chars(28)
         .build();
 
     let artist_lbl = Label::builder()
         .label(player.artist.as_deref().unwrap_or(""))
         .css_classes(vec!["media-artist".to_string()])
-        .halign(gtk::Align::Center)
+        .halign(gtk::Align::Start)
         .build();
     artist_lbl.set_visible(player.artist.is_some());
 
     let controls = Box::builder()
         .orientation(Orientation::Horizontal)
         .spacing(4)
-        .halign(gtk::Align::Center)
+        .halign(gtk::Align::Start)
+        .margin_top(4)
         .build();
 
     let prev_btn = Button::with_label("\u{f04a}");
@@ -489,10 +496,12 @@ fn build_player_card(player: &crate::media::MediaPlayerInfo) -> Box {
     controls.append(&play_btn);
     controls.append(&next_btn);
 
-    player_box.append(&header);
-    player_box.append(&title_lbl);
-    player_box.append(&artist_lbl);
-    player_box.append(&controls);
+    right_col.append(&title_lbl);
+    right_col.append(&artist_lbl);
+    right_col.append(&controls);
+
+    player_box.append(&icon);
+    player_box.append(&right_col);
     player_box
 }
 
