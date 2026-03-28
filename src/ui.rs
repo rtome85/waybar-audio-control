@@ -197,14 +197,12 @@ window.backdrop-capture {{
 }}
 
 .player-icon {{
-    font-size: 30px;
+    font-size: 52px;
     color: @_fg;
     min-width: 52px;
     min-height: 52px;
-    background: @_surface;
     border-radius: 50%;
-    padding: 8px;
-    margin-right: 4px;
+    margin-right: 8px;
 }}
 
 .media-title {{
@@ -220,13 +218,14 @@ window.backdrop-capture {{
 }}
 
 .media-btn {{
+    font-size: 10px;
     background: @_surface;
     color: @_fg;
     border: none;
     border-radius: 6px;
-    padding: 4px 10px;
-    min-width: 28px;
-    margin-bottom: 8px;
+    padding: 0 10px;
+    min-width: 20px;
+    margin-bottom: 4px;
 }}
 
 .media-btn:hover {{
@@ -463,6 +462,8 @@ fn build_player_card(player: &crate::media::MediaPlayerInfo) -> Box {
         .label(player.artist.as_deref().unwrap_or(""))
         .css_classes(vec!["media-artist".to_string()])
         .halign(gtk::Align::Start)
+        .ellipsize(gtk::pango::EllipsizeMode::End)
+        .max_width_chars(28)
         .build();
     artist_lbl.set_visible(player.artist.is_some());
 
