@@ -405,12 +405,6 @@ pub fn build_ui(app: &Application, audio: Arc<Mutex<AudioManager>>) -> Applicati
         .build();
     settings_button.connect_clicked(|_| {
         let _ = std::process::Command::new("omarchy-launch-audio").spawn();
-        std::thread::spawn(|| {
-            std::thread::sleep(std::time::Duration::from_millis(300));
-            let _ = std::process::Command::new("hyprctl")
-                .args(["dispatch", "focuswindow", "class:org.omarchy.wiremix"])
-                .spawn();
-        });
     });
     main_box.append(&settings_button);
 
