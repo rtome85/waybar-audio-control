@@ -243,6 +243,21 @@ window.backdrop-capture {{
 .carousel-dot.active {{
     background: @_fg;
 }}
+
+.settings-button {{
+    background: @_surface;
+    color: @_subtext;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 13px;
+    margin-top: 4px;
+}}
+
+.settings-button:hover {{
+    background: @_surface_hover;
+    color: @_fg;
+}}
 "#
     )
 }
@@ -378,6 +393,20 @@ pub fn build_ui(app: &Application, audio: Arc<Mutex<AudioManager>>) -> Applicati
         .build();
     main_box.append(&sources_title);
     main_box.append(&sources_box);
+
+    let separator_settings = Separator::builder()
+        .orientation(Orientation::Horizontal)
+        .build();
+    main_box.append(&separator_settings);
+
+    let settings_button = Button::builder()
+        .label("Settings")
+        .css_classes(vec!["settings-button".to_string()])
+        .build();
+    settings_button.connect_clicked(|_| {
+        let _ = std::process::Command::new("omarchy-launch-audio").spawn();
+    });
+    main_box.append(&settings_button);
 
     window.set_child(Some(&main_box));
 
