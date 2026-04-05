@@ -149,8 +149,7 @@ scale:disabled highlight {{
 }}
 
 .device-item {{
-    background-color: @_surface;
-    color: @_fg;
+    color: @_subtext;
     padding: 8px 12px;
     margin: 2px;
     transition: background-color 0.2s ease;
@@ -163,7 +162,7 @@ scale:disabled highlight {{
 .device-item.default {{
     background-color: @_surface;
     color: @_fg;
-    border: 1px solid @_fg;
+    
 }}
 
 .device-item.default:hover {{
@@ -258,6 +257,16 @@ window.backdrop-capture {{
     background: @_surface_hover;
     color: @_fg;
 }}
+
+.player-box {{
+    max-width: 250px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid @_surface;
+}}
+
+
 "#
     )
 }
@@ -459,7 +468,7 @@ pub fn build_ui(app: &Application, audio: Arc<Mutex<AudioManager>>) -> Applicati
 fn build_player_card(player: &crate::media::MediaPlayerInfo) -> Box {
     // Two-column layout: [app icon] | [title + artist + controls]
     let player_box = Box::builder()
-        .orientation(Orientation::Horizontal)
+        .orientation(Orientation::Vertical)
         .spacing(12)
         .margin_bottom(6)
         .valign(gtk::Align::Center)
@@ -475,6 +484,7 @@ fn build_player_card(player: &crate::media::MediaPlayerInfo) -> Box {
     // Right column: title, artist, controls
     let right_col = Box::builder()
         .orientation(Orientation::Vertical)
+        .css_classes(vec!["player-right-col".to_string()])
         .spacing(2)
         .valign(gtk::Align::Center)
         .build();
@@ -482,7 +492,7 @@ fn build_player_card(player: &crate::media::MediaPlayerInfo) -> Box {
     let title_lbl = Label::builder()
         .label(player.title.as_deref().unwrap_or("Unknown track"))
         .css_classes(vec!["media-title".to_string()])
-        .halign(gtk::Align::Start)
+        .halign(gtk::Align::Center)
         .ellipsize(gtk::pango::EllipsizeMode::End)
         .max_width_chars(28)
         .build();
@@ -490,7 +500,7 @@ fn build_player_card(player: &crate::media::MediaPlayerInfo) -> Box {
     let artist_lbl = Label::builder()
         .label(player.artist.as_deref().unwrap_or(""))
         .css_classes(vec!["media-artist".to_string()])
-        .halign(gtk::Align::Start)
+        .halign(gtk::Align::Center)
         .ellipsize(gtk::pango::EllipsizeMode::End)
         .max_width_chars(28)
         .build();
@@ -499,7 +509,7 @@ fn build_player_card(player: &crate::media::MediaPlayerInfo) -> Box {
     let controls = Box::builder()
         .orientation(Orientation::Horizontal)
         .spacing(4)
-        .halign(gtk::Align::Start)
+        .halign(gtk::Align::Center)
         .margin_top(4)
         .build();
 
@@ -530,7 +540,7 @@ fn build_player_card(player: &crate::media::MediaPlayerInfo) -> Box {
     right_col.append(&artist_lbl);
     right_col.append(&controls);
 
-    player_box.append(&icon);
+    // player_box.append(&icon);
     player_box.append(&right_col);
     player_box
 }
