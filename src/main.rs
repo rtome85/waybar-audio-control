@@ -70,9 +70,9 @@ fn main() {
                 .decorated(false)
                 .build();
 
-            // Backdrop fullscreen em Layer::Top que captura cliques fora do popup.
-            // Usa rgba(0,0,0,0.02) para forçar o GTK a commitar um buffer Wayland
-            // com alpha não-zero — necessário para o Hyprland encaminhar eventos de input.
+            // Fullscreen backdrop on Layer::Top that captures clicks outside the popup.
+            // Uses rgba(0,0,0,0.02) to force GTK to commit a Wayland buffer
+            // with non-zero alpha so Hyprland will forward input events.
             backdrop.init_layer_shell();
             backdrop.set_layer(Layer::Top);
             backdrop.set_keyboard_mode(gtk4_layer_shell::KeyboardMode::None);
