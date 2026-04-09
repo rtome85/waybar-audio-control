@@ -189,58 +189,10 @@ separator {{
     padding: 8px;
 }}
 
-window.backdrop-capture {{
+.backdrop-capture {{
     background-color: rgba(0, 0, 0, 0.02);
     border-radius: 0;
     padding: 0;
-}}
-
-.player-icon {{
-    font-size: 52px;
-    color: @_fg;
-    min-width: 52px;
-    min-height: 52px;
-    border-radius: 50%;
-    margin-right: 8px;
-}}
-
-.media-title {{
-    color: @_fg;
-    font-size: 13px;
-    font-weight: 500;
-}}
-
-.media-artist {{
-    color: @_subtext;
-    font-size: 11px;
-    margin-bottom: 4px;
-}}
-
-.media-btn {{
-    font-size: 10px;
-    background: @_surface;
-    color: @_fg;
-    border: none;
-    border-radius: 6px;
-    padding: 0 10px;
-    min-width: 20px;
-    margin-bottom: 4px;
-}}
-
-.media-btn:hover {{
-    background: @_surface_hover;
-}}
-
-.carousel-dot {{
-    background: alpha(@_fg, 0.25);
-    border-radius: 50%;
-    min-width: 0;
-    min-height: 0;
-    padding: 5px;
-}}
-
-.carousel-dot.active {{
-    background: @_fg;
 }}
 
 .settings-button {{
@@ -257,15 +209,6 @@ window.backdrop-capture {{
     background: @_surface_hover;
     color: @_fg;
 }}
-
-.player-box {{
-    max-width: 250px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid @_surface;
-}}
-
 
 "#
     )
@@ -330,26 +273,6 @@ pub fn build_ui(app: &Application, audio: Arc<Mutex<AudioManager>>) -> Applicati
         .spacing(0)
         .css_classes(vec!["container-box".to_string()])
         .build();
-
-    let media_box = Box::builder()
-        .orientation(Orientation::Vertical)
-        .spacing(2)
-        .build();
-    media_box.set_widget_name("media-box");
-
-    let media_title = Label::builder()
-        .label("Now Playing")
-        .css_classes(vec!["section-title".to_string()])
-        .halign(gtk::Align::Start)
-        .build();
-
-    let media_separator = Separator::builder()
-        .orientation(Orientation::Horizontal)
-        .build();
-
-    main_box.append(&media_title);
-    main_box.append(&media_box);
-    main_box.append(&media_separator);
 
     let streams_box = Box::builder()
         .orientation(Orientation::Vertical)
@@ -423,12 +346,6 @@ pub fn build_ui(app: &Application, audio: Arc<Mutex<AudioManager>>) -> Applicati
     let streams_box_clone = streams_box.clone();
     let sinks_box_clone = sinks_box.clone();
     let sources_box_clone = sources_box.clone();
-    let media_box_clone = media_box.clone();
-    let media_title_clone = media_title.clone();
-    let media_separator_clone = media_separator.clone();
-
-    let current_media: Rc<RefCell<Option<String>>> = Rc::new(RefCell::new(None));
-    let current_media_clone = current_media.clone();
 
     let audio_guard = audio.lock().unwrap();
     let streams_data = audio_guard.list_sink_inputs();
@@ -436,7 +353,6 @@ pub fn build_ui(app: &Application, audio: Arc<Mutex<AudioManager>>) -> Applicati
     let sources_data = audio_guard.list_sources();
     drop(audio_guard);
 
-    update_media(&media_box, &media_title, &media_separator, &current_media);
     update_streams(&streams_box, &streams_data, audio_clone.clone());
     update_devices(&sinks_box, &sinks_data, audio_clone.clone(), true);
     update_devices(&sources_box, &sources_data, audio_clone.clone(), false);
@@ -448,12 +364,6 @@ pub fn build_ui(app: &Application, audio: Arc<Mutex<AudioManager>>) -> Applicati
         let sources = audio_guard.list_sources();
         drop(audio_guard);
 
-        update_media(
-            &media_box_clone,
-            &media_title_clone,
-            &media_separator_clone,
-            &current_media_clone,
-        );
         update_streams(&streams_box_clone, &streams, audio_clone.clone());
         update_devices(&sinks_box_clone, &sinks, audio_clone.clone(), true);
         update_devices(&sources_box_clone, &sources, audio_clone.clone(), false);
@@ -463,182 +373,6 @@ pub fn build_ui(app: &Application, audio: Arc<Mutex<AudioManager>>) -> Applicati
 
     window.present();
     window
-}
-
-fn build_player_card(player: &crate::media::MediaPlayerInfo) -> Box {
-    // Two-column layout: [app icon] | [title + artist + controls]
-    let player_box = Box::builder()
-        .orientation(Orientation::Vertical)
-        .spacing(12)
-        .margin_bottom(6)
-        .valign(gtk::Align::Center)
-        .build();
-
-    // Left column: large circular app icon
-    let icon = Label::builder()
-        .label(app_icon(&player.identity))
-        .css_classes(vec!["player-icon".to_string()])
-        .valign(gtk::Align::Center)
-        .build();
-
-    // Right column: title, artist, controls
-    let right_col = Box::builder()
-        .orientation(Orientation::Vertical)
-        .css_classes(vec!["player-right-col".to_string()])
-        .spacing(2)
-        .valign(gtk::Align::Center)
-        .build();
-
-    let title_lbl = Label::builder()
-        .label(player.title.as_deref().unwrap_or("Unknown track"))
-        .css_classes(vec!["media-title".to_string()])
-        .halign(gtk::Align::Center)
-        .ellipsize(gtk::pango::EllipsizeMode::End)
-        .max_width_chars(28)
-        .build();
-
-    let artist_lbl = Label::builder()
-        .label(player.artist.as_deref().unwrap_or(""))
-        .css_classes(vec!["media-artist".to_string()])
-        .halign(gtk::Align::Center)
-        .ellipsize(gtk::pango::EllipsizeMode::End)
-        .max_width_chars(28)
-        .build();
-    artist_lbl.set_visible(player.artist.is_some());
-
-    let controls = Box::builder()
-        .orientation(Orientation::Horizontal)
-        .spacing(4)
-        .halign(gtk::Align::Center)
-        .margin_top(4)
-        .build();
-
-    let prev_btn = Button::with_label("\u{f04a}");
-    let play_btn = Button::with_label(if player.is_playing {
-        "\u{f04c}"
-    } else {
-        "\u{f04b}"
-    });
-    let next_btn = Button::with_label("\u{f04e}");
-
-    for btn in [&prev_btn, &play_btn, &next_btn] {
-        btn.add_css_class("media-btn");
-    }
-
-    let bus = player.bus_name.clone();
-    prev_btn.connect_clicked(move |_| crate::media::prev_track(&bus));
-    let bus = player.bus_name.clone();
-    play_btn.connect_clicked(move |_| crate::media::play_pause(&bus));
-    let bus = player.bus_name.clone();
-    next_btn.connect_clicked(move |_| crate::media::next_track(&bus));
-
-    controls.append(&prev_btn);
-    controls.append(&play_btn);
-    controls.append(&next_btn);
-
-    right_col.append(&title_lbl);
-    right_col.append(&artist_lbl);
-    right_col.append(&controls);
-
-    // player_box.append(&icon);
-    player_box.append(&right_col);
-    player_box
-}
-
-fn update_media(
-    container: &Box,
-    title_label: &Label,
-    separator: &Separator,
-    current_player: &Rc<RefCell<Option<String>>>,
-) {
-    let players = crate::media::list_players();
-
-    let visible = !players.is_empty();
-    title_label.set_visible(visible);
-    container.set_visible(visible);
-    separator.set_visible(visible);
-
-    // Save which player was visible so we can restore it after rebuild
-    let saved_bus = current_player.borrow().clone();
-
-    while let Some(child) = container.first_child() {
-        container.remove(&child);
-    }
-
-    if players.is_empty() {
-        return;
-    }
-
-    // Stack — one page per player
-    let stack = gtk::Stack::new();
-    stack.set_transition_type(gtk::StackTransitionType::SlideLeftRight);
-    stack.set_transition_duration(200);
-
-    for player in &players {
-        let card = build_player_card(player);
-        stack.add_named(&card, Some(&player.bus_name));
-    }
-
-    // Restore previous selection, or default to first
-    let initial_idx = saved_bus
-        .as_ref()
-        .and_then(|b| players.iter().position(|p| &p.bus_name == b))
-        .unwrap_or(0);
-
-    let initial_bus = players[initial_idx].bus_name.clone();
-    stack.set_visible_child_name(&initial_bus);
-    *current_player.borrow_mut() = Some(initial_bus);
-
-    container.append(&stack);
-
-    // Dots navigation row (only when multiple players)
-    if players.len() > 1 {
-        let dots_row = Box::builder()
-            .orientation(Orientation::Horizontal)
-            .spacing(6)
-            .halign(gtk::Align::Center)
-            .margin_top(6)
-            .build();
-
-        let dots: Vec<Box> = players
-            .iter()
-            .map(|_| {
-                let dot = Box::builder().orientation(Orientation::Horizontal).build();
-                dot.add_css_class("carousel-dot");
-                dot
-            })
-            .collect();
-
-        dots[initial_idx].add_css_class("active");
-
-        for (i, player) in players.iter().enumerate() {
-            let bus = player.bus_name.clone();
-            let current_clone = current_player.clone();
-            let weak_stack = stack.downgrade();
-            let weak_dots: Vec<_> = dots.iter().map(|d| d.downgrade()).collect();
-
-            let gesture = gtk::GestureClick::new();
-            gesture.connect_pressed(move |_, _, _, _| {
-                let Some(s) = weak_stack.upgrade() else {
-                    return;
-                };
-                s.set_visible_child_name(&bus);
-                *current_clone.borrow_mut() = Some(bus.clone());
-                for (j, wd) in weak_dots.iter().enumerate() {
-                    let Some(d) = wd.upgrade() else { continue };
-                    if j == i {
-                        d.add_css_class("active");
-                    } else {
-                        d.remove_css_class("active");
-                    }
-                }
-            });
-            dots[i].add_controller(gesture);
-            dots_row.append(&dots[i]);
-        }
-
-        container.append(&dots_row);
-    }
 }
 
 fn update_streams(container: &Box, streams: &[AudioStream], audio: Arc<Mutex<AudioManager>>) {

@@ -1,5 +1,4 @@
 mod audio;
-mod media;
 mod ui;
 
 use audio::AudioManager;
@@ -66,15 +65,14 @@ fn main() {
             };
 
             let popup = ui::build_ui(app, audio.clone());
-
-            // Backdrop fullscreen em Layer::Top que captura cliques fora do popup.
-            // Usa rgba(0,0,0,0.02) para forçar o GTK a commitar um buffer Wayland
-            // com alpha não-zero — necessário para o Hyprland encaminhar eventos de input.
             let backdrop = gtk::ApplicationWindow::builder()
                 .application(app)
                 .decorated(false)
                 .build();
 
+            // Fullscreen backdrop on Layer::Top that captures clicks outside the popup.
+            // Uses rgba(0,0,0,0.02) to force GTK to commit a Wayland buffer
+            // with non-zero alpha so Hyprland will forward input events.
             backdrop.init_layer_shell();
             backdrop.set_layer(Layer::Top);
             backdrop.set_keyboard_mode(gtk4_layer_shell::KeyboardMode::None);
@@ -99,7 +97,6 @@ fn main() {
             });
             backdrop.add_controller(gesture);
 
-            // Intercept WM close (Alt+F4) to hide instead of destroy
             popup.connect_close_request(|w| {
                 w.hide();
                 glib::Propagation::Stop
@@ -122,8 +119,8 @@ fn main() {
                             popup.hide();
                             backdrop.hide();
                         } else {
-                            popup.present();
                             backdrop.present();
+                            popup.present();
                         }
                     }
                     glib::ControlFlow::Continue
